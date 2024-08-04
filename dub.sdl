@@ -1,0 +1,5 @@
+name "dar"
+description "D library and utility to read AR files (.a extension)."
+authors "Renato Athaydes"
+copyright "Copyright © 2024, Renato Athaydes"
+license "MIT"

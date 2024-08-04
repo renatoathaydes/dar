@@ -1,0 +1,8 @@
+!<arch>
+dub.sdl         1722788759  501   20    100644  167       `
+name "dar"
+description "D library and utility to read AR files (.a extension)."
+authors "Renato Athaydes"
+copyright "Copyright © 2024, Renato Athaydes"
+license "MIT"
+

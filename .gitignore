@@ -1,0 +1,16 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/dar
+dar.so
+dar.dylib
+dar.dll
+dar.a
+dar.lib
+dar-test-*
+*.exe
+*.pdb
+*.o
+*.obj
+*.lst
