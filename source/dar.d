@@ -16,11 +16,17 @@ private alias isEven = unaryFun!("(a & 1) == 0");
 /// File header in the AR archive.
 struct ArHeader
 {
+    /// File name.
     string file;
+    /// File modification timestamp (in seconds).
     ulong mod;
+    /// Owner ID.
     uint owner;
+    /// Group ID.
     uint group;
+    /// File mode (type and permission).
     byte[8] mode;
+    /// File size in bytes.
     uint size;
     /// In some cases, the real file name is included in the data section.
     /// If that's the case, this value will be greater than 0 and indicates where the actual data starts.
@@ -40,6 +46,7 @@ final class ArHeaderIterator
         this.contents = contents;
     }
 
+    /// Check if this iterator is empty.
     bool empty() const @nogc => contents.empty;
 
     private void next()
@@ -54,6 +61,7 @@ final class ArHeaderIterator
         }
     }
 
+    /// Pop the front element of this iterator.
     void popFront()
     {
         auto value = current.get;
@@ -64,6 +72,7 @@ final class ArHeaderIterator
         current.nullify;
     }
 
+    /// Get the front element of this iterator.
     ArHeader front()
     {
         if (current.isNull)
@@ -103,7 +112,25 @@ ArHeaderIterator parseArFile(in byte[] file)
     return new ArHeaderIterator(file[8 .. $]);
 }
 
+///
+unittest
+{
+    import std.file : read;
+
+    // to create the test.a file:
+    //     ar r test.a dub.sdl
+    auto contents = cast(immutable(byte[])) read("test/test1.a");
+    auto ar = parseArFile(contents);
+
+    assert(ar.front.file == "dub.sdl", "file name unexpected: " ~ ar.front.file);
+    assert(ar.front.dataStart == 0u, "dataStart unexpected: " ~ ar.front.dataStart.to!string);
+    assert(ar.front.size == 167u, "size unexpected: " ~ ar.front.size.to!string);
+    ar.popFront;
+    assert(ar.empty, "archive is not empty");
+}
+
 /// Parse an AR header, assuming the given slice starts from one.
+/// 
 /// Returns: the next header in the archive.
 ArHeader parseArHeader(in byte[] input)
 {
@@ -132,21 +159,4 @@ ArHeader parseArHeader(in byte[] input)
 
     byte[8] mode = input[40 .. 48];
     return ArHeader(file, 0, 0, 0, mode, size, dataStart);
-}
-
-///
-unittest
-{
-    import std.file : read;
-
-    // to create the test.a file:
-    //     ar r test.a dub.sdl
-    auto contents = cast(immutable(byte[])) read("test/test1.a");
-    auto ar = parseArFile(contents);
-
-    assert(ar.front.file == "dub.sdl", "file name unexpected: " ~ ar.front.file);
-    assert(ar.front.dataStart == 0u, "dataStart unexpected: " ~ ar.front.dataStart.to!string);
-    assert(ar.front.size == 167u, "size unexpected: " ~ ar.front.size.to!string);
-    ar.popFront;
-    assert(ar.empty, "archive is not empty");
 }
