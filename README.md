@@ -1,6 +1,6 @@
 # DAR
 
-D AR Archive Parser.
+D [AR Archive](https://en.wikipedia.org/wiki/Ar_(Unix)) Parser.
 
 A library and utility.
 
