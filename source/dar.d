@@ -121,10 +121,11 @@ unittest
     //     ar r test.a dub.sdl
     auto contents = cast(const(byte[])) read("test/test1.a");
     auto ar = parseArFile(contents);
-
-    assert(ar.front.file == "dub.sdl", "file name unexpected: " ~ ar.front.file);
-    assert(ar.front.dataStart == 0u, "dataStart unexpected: " ~ ar.front.dataStart.to!string);
-    assert(ar.front.size == 167u, "size unexpected: " ~ ar.front.size.to!string);
+    auto f = ar.front;
+    assert(f.file == "dub.sdl", "file name unexpected: " ~ f.file);
+    assert(f.mod == 1722788759u, "mod unexpected: " ~ f.mod.to!string);
+    assert(f.dataStart == 0u, "dataStart unexpected: " ~ f.dataStart.to!string);
+    assert(f.size == 167u, "size unexpected: " ~ f.size.to!string);
     ar.popFront;
     assert(ar.empty, "archive is not empty");
 }
@@ -143,8 +144,10 @@ ArHeader parseArHeader(in byte[] input)
         throw new ArException("Cannot recognize AR header (wrong ending chars)");
     }
     auto file = (cast(const char[]) input[0 .. 16]).strip;
-    auto sizeStr = (cast(const char[]) input[48 .. 58]).strip;
-    auto size = sizeStr.to!uint;
+    auto mod = (cast(const char[]) input[16 .. 16 + 12]).strip.to!ulong;
+    auto owner = (cast(const char[]) input[28 .. 28 + 6]).strip.to!uint;
+    auto group = (cast(const char[]) input[34 .. 34 + 6]).strip.to!uint;
+    auto size = (cast(const char[]) input[48 .. 58]).strip.to!uint;
     auto dataStart = 0u;
     if (file.startsWith("#1/"))
     {
@@ -157,6 +160,15 @@ ArHeader parseArHeader(in byte[] input)
         dataStart = nameSize;
     }
 
-    byte[8] mode = input[40 .. 48];
-    return ArHeader((cast(string) file.dup), 0, 0, 0, mode, size, dataStart);
+    byte[8] mode = input[40 .. 48].dup;
+    ArHeader header = {
+        file: (cast(string) file.dup),
+        mod: mod,
+        owner: owner,
+        group: group,
+        mode: mode,
+        size: size,
+        dataStart: dataStart
+    };
+    return header;
 }
