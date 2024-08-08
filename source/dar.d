@@ -119,7 +119,7 @@ unittest
 
     // to create the test.a file:
     //     ar r test.a dub.sdl
-    auto contents = cast(immutable(byte[])) read("test/test1.a");
+    auto contents = cast(const(byte[])) read("test/test1.a");
     auto ar = parseArFile(contents);
 
     assert(ar.front.file == "dub.sdl", "file name unexpected: " ~ ar.front.file);
@@ -142,8 +142,8 @@ ArHeader parseArHeader(in byte[] input)
     {
         throw new ArException("Cannot recognize AR header (wrong ending chars)");
     }
-    auto file = (cast(string) input[0 .. 16]).strip;
-    auto sizeStr = (cast(string) input[48 .. 58]).strip;
+    auto file = (cast(const char[]) input[0 .. 16]).strip;
+    auto sizeStr = (cast(const char[]) input[48 .. 58]).strip;
     auto size = sizeStr.to!uint;
     auto dataStart = 0u;
     if (file.startsWith("#1/"))
@@ -153,10 +153,10 @@ ArHeader parseArHeader(in byte[] input)
         import core.stdc.string : strlen;
 
         auto end = strlen(cast(const(char*)) input[60 .. 60 + nameSize]);
-        file = (cast(string) input[60 .. 60 + end]).strip;
+        file = cast(const(char[])) input[60 .. 60 + end];
         dataStart = nameSize;
     }
 
     byte[8] mode = input[40 .. 48];
-    return ArHeader(file, 0, 0, 0, mode, size, dataStart);
+    return ArHeader((cast(string) file.dup), 0, 0, 0, mode, size, dataStart);
 }
