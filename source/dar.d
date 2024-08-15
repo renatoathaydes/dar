@@ -41,7 +41,7 @@ final class ArHeaderIterator
     private const(byte)[] contents;
     private uint index;
 
-    this(in byte[] contents) pure
+    this(const byte[] contents) pure
     {
         this.contents = contents;
     }
@@ -98,7 +98,7 @@ class ArException : Exception
 
 /// Parse an AR archive.
 /// Returns: a `InputRange` over the contents of the AR archive.
-ArHeaderIterator parseArFile(in byte[] file)
+ArHeaderIterator parseArFile(const byte[] file)
 {
     if (file.length < 7)
     {
@@ -116,10 +116,11 @@ ArHeaderIterator parseArFile(in byte[] file)
 unittest
 {
     import std.file : read;
+    import std.exception : assumeUnique;
 
     // to create the test.a file:
     //     ar r test.a dub.sdl
-    auto contents = cast(const(byte[])) read("test/test1.a");
+    auto contents = assumeUnique(cast (byte[]) read("test/test1.a"));
     auto ar = parseArFile(contents);
     auto f = ar.front;
     assert(f.file == "dub.sdl", "file name unexpected: " ~ f.file);
@@ -133,7 +134,7 @@ unittest
 /// Parse an AR header, assuming the given slice starts from one.
 /// 
 /// Returns: the next header in the archive.
-ArHeader parseArHeader(in byte[] input)
+ArHeader parseArHeader(const byte[] input)
 {
     if (input.length < 60)
     {
@@ -162,7 +163,7 @@ ArHeader parseArHeader(in byte[] input)
 
     byte[8] mode = input[40 .. 48].dup;
     ArHeader header = {
-        file: (cast(string) file.dup),
+        file: cast(string) file.dup,
         mod: mod,
         owner: owner,
         group: group,
