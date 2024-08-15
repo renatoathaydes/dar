@@ -4,9 +4,7 @@
 /// That returns an `InputRange` of `ArHeader`s, providing each file header in the archive.
 module dar;
 
-import std.mmfile : MmFile;
 import std.conv : to;
-import std.string : strip, startsWith;
 import std.range : empty;
 import std.functional : unaryFun;
 import std.typecons : Nullable;
@@ -136,6 +134,8 @@ unittest
 /// Returns: the next header in the archive.
 ArHeader parseArHeader(const byte[] input)
 {
+    import std.string : strip, startsWith;
+    
     if (input.length < 60)
     {
         throw new ArException("File too short, cannot parse AR header");
