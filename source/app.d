@@ -1,14 +1,13 @@
-import std.stdio : stderr, writeln;
-import std.mmfile : MmFile;
+import std.stdio : File, chunks, stderr, writeln;
 import dar : parseArFile, ArException;
 import std.algorithm.iteration : each;
 
 int main(string[] args)
 {
-	scope mfile = new MmFile(args[1]);
+	scope file = File(args[1], "rb");
 	try
 	{
-		scope ar = parseArFile(cast(const(byte[])) mfile[]);
+		scope ar = parseArFile(file);
 		ar.each!writeln;
 	}
 	catch (ArException e)

@@ -4,8 +4,8 @@
 /// That returns an `InputRange` of `ArHeader`s, providing each file header in the archive.
 module dar;
 
+import std.stdio : File, SEEK_CUR;
 import std.conv : to;
-import std.range : empty;
 import std.functional : unaryFun;
 import std.typecons : Nullable;
 
@@ -36,22 +36,26 @@ final class ArHeaderIterator
 {
 
     private Nullable!ArHeader current;
-    private const(byte)[] contents;
-    private uint index;
+    private File file;
+    private size_t index;
+    private const size_t len;
 
-    this(const byte[] contents) pure
+    this(File file)
     {
-        this.contents = contents;
+        this.file = file;
+        this.index = file.tell;
+        this.len = file.size;
     }
 
     /// Check if this iterator is empty.
-    bool empty() const @nogc => contents.empty;
+    bool empty() const @nogc => index >= len;
 
     private void next()
     {
         try
         {
-            current = parseArHeader(contents);
+            current = parseArHeader(file);
+            index += file.tell;
         }
         catch (ArException e)
         {
@@ -63,10 +67,10 @@ final class ArHeaderIterator
     void popFront()
     {
         auto value = current.get;
-        auto entryLen = value.size.isEven ? value.size : value.size + 1;
-        auto nextStart = 60 + entryLen;
-        index += nextStart;
-        contents = contents[nextStart .. $];
+        // dataStart bytes have been read, so effectively the entry-len must exclude that
+        auto entryLen = (value.size.isEven ? value.size : value.size + 1) - value.dataStart;
+        file.seek(entryLen, SEEK_CUR);
+        index = file.tell;
         current.nullify;
     }
 
@@ -96,30 +100,25 @@ class ArException : Exception
 
 /// Parse an AR archive.
 /// Returns: a `InputRange` over the contents of the AR archive.
-ArHeaderIterator parseArFile(const byte[] file)
+ArHeaderIterator parseArFile(File file)
 {
-    if (file.length < 7)
-    {
-        throw new ArException("File is not AR archive, does not start with magic string !<arch>");
-    }
-    auto magic = cast(string) file[0 .. 8];
+    byte[8] buffer;
+    const magic = cast(char[]) file.rawRead(buffer);
     if (magic != "!<arch>\n")
     {
         throw new ArException("File is not AR archive, does not start with magic string !<arch>");
     }
-    return new ArHeaderIterator(file[8 .. $]);
+    return new ArHeaderIterator(file);
 }
 
 ///
 unittest
 {
-    import std.file : read;
-    import std.exception : assumeUnique;
-
+    import std.range : empty;
     // to create the test.a file:
     //     ar r test.a dub.sdl
-    auto contents = assumeUnique(cast (byte[]) read("test/test1.a"));
-    auto ar = parseArFile(contents);
+    scope file = File("test/test1.a");
+    auto ar = parseArFile(file);
     auto f = ar.front;
     assert(f.file == "dub.sdl", "file name unexpected: " ~ f.file);
     assert(f.mod == 1722788759u, "mod unexpected: " ~ f.mod.to!string);
@@ -129,12 +128,14 @@ unittest
     assert(ar.empty, "archive is not empty");
 }
 
-/// Parse an AR header, assuming the given slice starts from one.
+/// Parse an AR header, assuming the given file handle starts from one.
 /// 
 /// Returns: the next header in the archive.
-ArHeader parseArHeader(const byte[] input)
+ArHeader parseArHeader(File handle)
 {
     import std.string : strip, startsWith;
+    byte[60] buffer;
+    auto input = handle.rawRead(buffer);
     
     if (input.length < 60)
     {
@@ -155,15 +156,15 @@ ArHeader parseArHeader(const byte[] input)
         auto nameSize = file[3 .. $].to!uint;
         // For some reason, the lengths are larger than they should, but names use C-convention and end with \0
         import core.stdc.string : strlen;
-
-        auto end = strlen(cast(const(char*)) input[60 .. 60 + nameSize]);
-        file = cast(const(char[])) input[60 .. 60 + end];
+        auto filez = cast(const(char*)) handle.rawRead(buffer[0 .. nameSize]);
+        auto end = strlen(filez);
+        file = cast(const(char[])) filez[0 .. end];
         dataStart = nameSize;
     }
 
     byte[8] mode = input[40 .. 48].dup;
     ArHeader header = {
-        file: cast(string) file.dup,
+        file: cast(string) file.idup,
         mod: mod,
         owner: owner,
         group: group,
