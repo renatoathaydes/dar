@@ -7,7 +7,6 @@ module dar;
 import std.stdio : File, SEEK_CUR;
 import std.conv : to;
 import std.functional : unaryFun;
-import std.typecons : Nullable;
 
 private alias isEven = unaryFun!("(a & 1) == 0");
 
@@ -31,58 +30,6 @@ struct ArHeader
     uint dataStart;
 }
 
-/// Iterator over the `ArHeader`s in an AR archive.
-final class ArHeaderIterator
-{
-
-    private Nullable!ArHeader current;
-    private File file;
-    private size_t index;
-    private const size_t len;
-
-    this(File file)
-    {
-        this.file = file;
-        this.index = file.tell;
-        this.len = file.size;
-    }
-
-    /// Check if this iterator is empty.
-    bool empty() const @nogc => index >= len;
-
-    private void next()
-    {
-        try
-        {
-            current = parseArHeader(file);
-            index += file.tell;
-        }
-        catch (ArException e)
-        {
-            throw e.withPrefix("at " ~ index.to!string ~ ": ");
-        }
-    }
-
-    /// Pop the front element of this iterator.
-    void popFront()
-    {
-        auto value = current.get;
-        // dataStart bytes have been read, so effectively the entry-len must exclude that
-        auto entryLen = (value.size.isEven ? value.size : value.size + 1) - value.dataStart;
-        file.seek(entryLen, SEEK_CUR);
-        index = file.tell;
-        current.nullify;
-    }
-
-    /// Get the front element of this iterator.
-    ArHeader front()
-    {
-        if (current.isNull)
-            next();
-        return current.get;
-    }
-}
-
 /// Exception thrown in case of an error parsing an AR archive.
 class ArException : Exception
 {
@@ -100,21 +47,54 @@ class ArException : Exception
 
 /// Parse an AR archive.
 /// Returns: a `InputRange` over the contents of the AR archive.
-ArHeaderIterator parseArFile(File file)
+auto parseArFile(scope ref File file)
 {
-    byte[8] buffer;
-    const magic = cast(char[]) file.rawRead(buffer);
-    if (magic != "!<arch>\n")
+    import std.concurrency : Generator;
     {
-        throw new ArException("File is not AR archive, does not start with magic string !<arch>");
+        byte[8] buffer;
+        const magic = cast(char[]) file.rawRead(buffer);
+        if (magic != "!<arch>\n")
+        {
+            throw new ArException(
+                "File is not AR archive, does not start with magic string !<arch>");
+        }
     }
-    return new ArHeaderIterator(file);
+
+    return new Generator!ArHeader(() { arFileFiber(file); });
+}
+
+private void arFileFiber(scope ref File file)
+{
+    import std.concurrency : yield;
+
+    ulong index;
+    ArHeader ar;
+    immutable len = file.size;
+    while ((index = file.tell) < len)
+    {
+        try
+        {
+            ar = parseArHeader(file);
+        }
+        catch (ArException e)
+        {
+            throw e.withPrefix("at " ~ index.to!string ~ ": ");
+        }
+
+        // skip the current file entry
+        // dataStart bytes have been read, so effectively the entry-len must exclude that
+        auto entryLen = (ar.size.isEven ? ar.size : ar.size + 1) - ar.dataStart;
+        file.seek(entryLen, SEEK_CUR);
+
+        yield(ar);
+    }
 }
 
 ///
 unittest
 {
     import std.range : empty;
+
     // to create the test.a file:
     //     ar r test.a dub.sdl
     scope file = File("test/test1.a");
@@ -134,9 +114,10 @@ unittest
 ArHeader parseArHeader(File handle)
 {
     import std.string : strip, startsWith;
+
     byte[60] buffer;
     auto input = handle.rawRead(buffer);
-    
+
     if (input.length < 60)
     {
         throw new ArException("File too short, cannot parse AR header");
@@ -156,6 +137,7 @@ ArHeader parseArHeader(File handle)
         auto nameSize = file[3 .. $].to!uint;
         // For some reason, the lengths are larger than they should, but names use C-convention and end with \0
         import core.stdc.string : strlen;
+
         auto filez = cast(const(char*)) handle.rawRead(buffer[0 .. nameSize]);
         auto end = strlen(filez);
         file = cast(const(char[])) filez[0 .. end];
@@ -170,7 +152,6 @@ ArHeader parseArHeader(File handle)
         group: group,
         mode: mode,
         size: size,
-        dataStart: dataStart
-    };
-    return header;
-}
+        dataStart: dataStart};
+        return header;
+    }
